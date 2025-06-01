@@ -15,6 +15,8 @@ def parse_amount(line: str):
     groups = []
     decimal = ""
     sign = ""
+    has_space = False
+    parse_done = False
 
     # a small stack based parser for the amount in a line
     for ch in reversed(line.strip()):
@@ -28,6 +30,7 @@ def parse_amount(line: str):
                 groups.append("".join(reversed(stack)))
                 stack.clear()
                 sign = "-"
+                parse_done = True
                 break
         elif ch == " ":
             if len(stack) == 3:
@@ -36,9 +39,25 @@ def parse_amount(line: str):
             elif 0 < len(stack) < 3:
                 groups.append("".join(reversed(stack)))
                 stack.clear()
+                parse_done = True
                 break
+            elif len(stack) > 3:
+                if not has_space:
+                    # we discovered that the number doesn't use space
+                    # as a separator, so we are done
+                    groups.append("".join(reversed(stack)))
+                    stack.clear()
+                parse_done = True
+                break
+
+            has_space = True
         else:
             break
+
+    if not parse_done and len(stack) > 0:
+        # if we have a stack left, it means we have a number
+        groups.append("".join(reversed(stack)))
+        stack.clear()
 
     integer = sign + "".join(reversed(groups))
     full_number = sign + " ".join(reversed(groups)) + ("," + decimal if decimal else "")

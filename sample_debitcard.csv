@@ -1,0 +1,5 @@
+Bokføringsdato;Tittel;Beløp
+01.01.2024;Payment A;-100,50
+05.01.2024;Transfer B;2000,75
+Invalid Date;Should Be Skipped;10,00
+10.01.2024;Payment C;-30,00
