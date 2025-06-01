@@ -3,6 +3,7 @@
 import argparse
 from decimal import Decimal
 import pandas as pd
+import dateparser
 
 
 def parse_amount(line: str):
@@ -15,7 +16,7 @@ def parse_amount(line: str):
     decimal = ""
     sign = ""
 
-    #a small stack based parser for the amount in a line
+    # a small stack based parser for the amount in a line
     for ch in reversed(line.strip()):
         if ch.isdigit():
             stack.append(ch)
@@ -40,9 +41,27 @@ def parse_amount(line: str):
             break
 
     integer = sign + "".join(reversed(groups))
-    full_number = integer + ("," + decimal if decimal else "")
-    idx = line.replace(" ", "").rfind(full_number)
+    full_number = sign + " ".join(reversed(groups)) + ("," + decimal if decimal else "")
+    idx = line.rfind(full_number)
     return f"{integer}.{decimal}", idx
+
+
+def parse_date_description(line: str):
+    """
+    Parse the date and description from a line.
+    Returns (date: str, description: str).
+    """
+    parts = line.split(" ")
+    dt = dateparser.parse(" ".join(parts[0:3]), languages=["nb"])
+    description = " ".join(parts[3:]).strip()
+    return dt, description
+
+
+def parse_payment_line(line):
+    """Parse a single line of credit card record and return the amount and description"""
+    amount, idx = parse_amount(line)
+    date, description = parse_date_description(line[:idx].strip())
+    return date, description, Decimal(amount)
 
 
 def parse_creditcard_records(creditcard_record_filename):
@@ -50,17 +69,11 @@ def parse_creditcard_records(creditcard_record_filename):
     with open(creditcard_record_filename, "r", encoding="utf-8") as f:
         lines = list(filter(lambda x: x.strip() != "", f.readlines()))
         for line in lines:
-            _, description, amount = parse_payment_line(line)
-            print(f"{amount};{description}")
+            date, description, amount = parse_payment_line(line)
+            yield date, amount, description
 
 
-def parse_payment_line(line):
-    """Parse a single line of credit card record and return the amount and description"""
-    amount, idx = parse_amount(line)
-    return "", line[:idx].strip(), Decimal(amount)
-
-
-def parse_csv(csvfilename: str):
+def parse_debitcard(csvfilename: str):
     """Main function that reads a csv file and prints the amount and comment of each row"""
     # parse the csvfile into dataframe
     df = pd.read_csv(csvfilename, sep=";")
@@ -68,8 +81,12 @@ def parse_csv(csvfilename: str):
     # go through it row by row
     for _, row in df.iterrows():
         amount = Decimal(row["Beløp"].replace(",", "."))
-        comment = row["Tittel"]
-        print(f"{amount};{comment}")
+        description = row["Tittel"]
+        date = dateparser.parse(row["Bokføringsdato"], languages=["nb"])
+        if date is None:
+            continue
+
+        yield date, amount, description
 
 
 if __name__ == "__main__":
@@ -81,5 +98,8 @@ if __name__ == "__main__":
         "creditcard_record_filename", type=str, help="credit card record filename"
     )
     args = parser.parse_args()
-    parse_csv(args.csvfilename)
-    parse_creditcard_records(args.creditcard_record_filename)
+    result = list(parse_debitcard(args.csvfilename))
+    result += list(parse_creditcard_records(args.creditcard_record_filename))
+
+    for _date, _amount, _description in result:
+        print(f"{_date};{_amount};{_description}")
